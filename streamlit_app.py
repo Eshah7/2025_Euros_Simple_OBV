@@ -557,4 +557,3 @@ with tab1:
     st.write("What are some interesting observations you notice? A huge point for discourse was if Spain shouldn't have subbed out Alexia Putellas in the 70th minute of the Euros Final. I noticed that her OBV was quite low for the game, but of course we cannot determine her performance just based on one simple metric! What do you think?")
 
 st.caption("All credit for creating an OBV model goes to Hudl Statsbomb. As well as providing free open access data for the 2025 Euros. AI was utilized to improve styling, code performance and general development. All commentary and thoughts are my own. Please free to connect with me [LinkedIn](https://www.linkedin.com/in/eshah17) to share feedback or have discussion. Thank you!")
-
