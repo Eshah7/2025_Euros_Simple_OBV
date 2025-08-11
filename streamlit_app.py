@@ -304,7 +304,7 @@ with tab2:
     st.dataframe(player_obv, use_container_width=True)
     st.success("Further analysis with the predicted OBV is on the results page!")
 
-# --- helpers (top-level, outside the tab) ---
+# --- helpers (top-level, outside the tab) --- #Using ChatGpt to improve the performance
 @st.cache_data(show_spinner=False)
 def teams_list(oa: pd.DataFrame):
     # if already categorical, this is O(k); otherwise still fast and cached
