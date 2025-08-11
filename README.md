@@ -4,7 +4,7 @@ This app shares some quick visuals to understand who was contributing to the tea
 
 Click below to view the web-app, hosted by Streamlit.
 
-[![Click here to view the web-app, hosted by Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://euros2025.streamlit.app/)
+[![Click here to view the web-app, hosted by Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://2025euros.streamlit.app/)
 
 The data for this analysis is from: [Hudl Statsbomb](https://www.hudl.com/blog/hudl-statsbomb-free-euro-2025-data). 
 
