@@ -304,181 +304,239 @@ with tab2:
     st.dataframe(player_obv, use_container_width=True)
     st.success("Further analysis with the predicted OBV is on the results page!")
 
-# --- helpers (top-level, outside the tab) --- #Using ChatGpt to improve the performance
-@st.cache_data(show_spinner=False)
-def teams_list(oa: pd.DataFrame):
-    # if already categorical, this is O(k); otherwise still fast and cached
-    s = oa["team"].dropna()
-    if hasattr(s.dtype, "name") and "category" in s.dtype.name:
-        return sorted(s.cat.categories.tolist())
-    return sorted(s.astype(str).unique().tolist())
 
-@st.cache_data(show_spinner=False)
-def players_for_team(oa: pd.DataFrame, team: str):
-    s = oa.loc[oa["team"] == team, "player"].dropna()
-    return sorted(s.astype(str).unique().tolist())
-
-@st.cache_data(show_spinner=False)
-def topk_player_counts(oa: pd.DataFrame, top_pairs: pd.DataFrame):
-    # compute actions/total_obv only for the top visible players
-    key = tuple(map(tuple, top_pairs[["player","team"]].values))
-    sub = oa.merge(top_pairs[["player","team"]].drop_duplicates(), on=["player","team"], how="inner")
-    g = (sub.groupby(["player","team"], dropna=False)["OBV"]
-            .agg(actions="size", total_obv="sum").reset_index())
-    return g
-
-def _progress_col(label="OBV bar"):
-    # nicer in-cell bar without Styler (lighter memory)
-    return st.column_config.ProgressColumn(
-        label, min_value=0.0, max_value=None, format="%.3f"
-    )
-
-# ---------------- TAB 1 (drop-in) ----------------
-with tab1:
+with tab1: 
     st.subheader("🏆 Overall 2025 Euros Analysis")
 
-    # === Top 10 players table ===
-    # keep this tiny; don't compute counts for all players
-    top10 = (
-        player_obv.reset_index(drop=True).copy()
-        .sort_values("OBV", ascending=False)
-        .head(10)
-    )
+    #Display the top 10 ranking table, stylized with the support of ChatGPT
+    #Stylize the table 
+    tbl = player_obv.reset_index(drop=True).copy()
 
-    # medal/rank column (vectorized)
-    r = np.arange(1, len(top10) + 1)
-    medal = np.array([""] * len(top10), dtype=object)
-    if len(top10) >= 1: medal[0] = "🥇"
-    if len(top10) >= 2: medal[1] = "🥈"
-    if len(top10) >= 3: medal[2] = "🥉"
-    top10.insert(0, "#", np.where(medal == "", np.char.zfill(r.astype(str), 2), medal))
+    # Add rank / medal badges
+    tbl.insert(0, "#", np.arange(1, len(tbl)+1))
+    medal = {1:"🥇", 2:"🥈", 3:"🥉"}
+    tbl["#"] = tbl["#"].map(lambda r: medal.get(r, f"{r:02d}"))
 
-    # If we have obv_actions, compute counts ONLY for these 10
-    if obv_actions is not None and len(top10):
-        counts10 = topk_player_counts(obv_actions, top10[["player","team"]])
-        tbl = (top10.drop(columns=["OBV"])
-                    .merge(counts10.rename(columns={"total_obv":"OBV"}), on=["player","team"], how="left"))
+    # (Optional) add context: actions & avg OBV if you have obv_actions
+    if obv_actions is not None:
+        counts = (obv_actions.groupby(["player","team"])["OBV"]
+                .agg(actions="size", total_obv="sum")
+                .reset_index())
+        tbl = tbl.drop(columns=["OBV"]).merge(
+            counts.rename(columns={"total_obv":"OBV"}),
+            on=["player","team"],
+            how="left"
+        )
         tbl["avg_obv"] = tbl["OBV"] / tbl["actions"].replace(0, np.nan)
     else:
-        tbl = top10.copy()
+        # still show tidy OBV only
         tbl["actions"] = np.nan
         tbl["avg_obv"] = np.nan
 
-    tbl = tbl[["#", "player", "team", "OBV", "actions", "avg_obv"]]
-    # Display without Styler to avoid large HTML; use column_config instead
-    st.markdown("#### Top 10 Players Ranked by OBV")
-    st.dataframe(
-        tbl,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "#": st.column_config.TextColumn("#", width="small"),
-            "player": st.column_config.TextColumn("Player"),
-            "team": st.column_config.TextColumn("Team"),
-            "OBV": _progress_col("OBV"),
-            "actions": st.column_config.NumberColumn("Actions", format="%.0f"),
-            "avg_obv": st.column_config.NumberColumn("avg OBV", format="%.4f"),
-        }
-    )
-    st.caption("OBV = change in P(goal within the next 5 actions). ‘avg_obv’ ≈ efficiency per action.")
+    # Order/rename columns for presentation
+    cols = ["#", "player", "team", "OBV", "actions", "avg_obv"]
+    tbl = tbl[cols]
+    tbl["OBV"] = pd.to_numeric(tbl["OBV"], errors="coerce")
+    tbl["avg_obv"] = pd.to_numeric(tbl["avg_obv"], errors="coerce")
 
+    # Nicely formatted strings (without ugly trailing zeros)
+    fmt = {
+        "OBV":    lambda x: "" if pd.isna(x) else f"{x:.3f}".rstrip("0").rstrip("."),
+        "avg_obv":lambda x: "" if pd.isna(x) else f"{x:.4f}".rstrip("0").rstrip("."),
+        "actions": "{:,}"
+    }
+
+    # Row highlight helper for top 3
+    def _highlight_top3(row):
+        base = [""] * len(row)
+        shades = {0:"#1e293b", 1:"#0f172a"}  # subtle zebra striping
+        row_idx = getattr(row, "name", 0)
+        bg = shades[row_idx % 2]
+        base = [f"background-color:{bg}; color:#e5e7eb;"] * len(row)
+        if row_idx == 0:  # rank 1
+            base = [ "background-color:#0ea5e9; color:white; font-weight:bold;" ]*len(row)
+        elif row_idx == 1:  # rank 2
+            base = [ "background-color:#60a5fa; color:white; font-weight:bold;" ]*len(row)
+        elif row_idx == 2:  # rank 3
+            base = [ "background-color:#93c5fd; color:#0b1220; font-weight:bold;" ]*len(row)
+        return base
+
+    # Build Styler
+    styler = (
+        tbl.style
+        # OBV bar (keeps numeric; format later)
+        .bar(subset=["OBV"], align="left", color="#22d3ee")
+        .format(fmt)
+        .hide(axis="index")
+        .set_table_styles([
+            {"selector":"th", "props":[("background-color","#111827"),("color","#e5e7eb"),("font-size","12pt"),
+                                        ("text-transform","uppercase"),("letter-spacing",".03em")]},
+            {"selector":"td", "props":[("font-size","11pt"),("border","0px"),("padding","6px 10px")]},
+        ])
+        .set_properties(subset=["#"], **{"text-align":"center", "width":"40px", "font-weight":"bold"})
+        .set_properties(subset=["player","team"], **{"text-align":"left", "font-weight":"600"})
+        .set_properties(subset=["OBV","avg_obv","actions"], **{"text-align":"right"})
+        .apply(_highlight_top3, axis=1)
+    )
+
+    st.markdown("#### Top 10 Players Ranked by OBV")
+    st.dataframe(styler, use_container_width=True)
+    st.caption("OBV = change in P(goal within the next 5 actions). ‘avg_obv’ ≈ efficiency per action.")
     st.write("You might be wondering why isn't Spain's Esther González, the top scorer at Euros 2025, in the top 10 for the players that added the most on-ball value.")
     st.write("This model highly rewards players who often move balls into threatening states through long progressive passes/carries, which means that the difference between the probabilty of scoring before their action and after their action is large, hence their OBV is higher. Strikers who are required to perform clincal finishes to score a goal would have a smaller difference, as the ball might already be in a threatening location.")
     st.write("Our model can be improved by including more features, better understanding which features impact the model the most, and using a more advanced machine learning tool such as XGBoost.")
 
-    # === Team rankings table (per-team aggregate only) ===
     st.markdown("#### Players in a Team Ranked by OBV")
-    col1, col2 = st.columns([0.25, 0.75])
+    
+    col1, col2 = st.columns([0.2, 0.8])
 
-    with col1:
-        teams = teams_list(obv_actions if obv_actions is not None else pd.DataFrame(columns=["team"]))
-        team_pick = st.selectbox("Select a team", options=teams, index=0 if teams else None)
+    with col1: 
+        teams = sorted(obv_actions['team'].dropna().unique())
+        team_pick = st.selectbox("Select a team", options = teams, index = 0)
 
-    with col2:
-        if obv_actions is not None and team_pick:
-            team_df = obv_actions.loc[obv_actions["team"] == team_pick, ["player","team","OBV"]]
-            leader = (team_df.groupby(["player","team"], dropna=False)["OBV"]
-                              .agg(OBV="sum", actions="size")
-                              .reset_index()
-                              .sort_values("OBV", ascending=False)
-                              .reset_index(drop=True))
-            leader["avg_obv"] = leader["OBV"] / leader["actions"].replace(0, np.nan)
-            leader.insert(0, "#", np.char.zfill((np.arange(1, len(leader)+1)).astype(str), 2))
-            # medals on top 3
-            for i, medal_ in enumerate(["🥇","🥈","🥉"]):
-                if i < len(leader): leader.at[i, "#"] = medal_
-            team_tbl = leader[["#", "player", "team", "OBV", "actions", "avg_obv"]]
-        else:
-            team_tbl = pd.DataFrame(columns=["#", "player", "team", "OBV", "actions", "avg_obv"])
+    with col2: 
+        # 2) Aggregate OBV for the selected team and stylized using ChatGPT
+        team_df = obv_actions[obv_actions['team'] == team_pick].copy()
 
-        st.markdown(f"##### {team_pick if team_pick else '—'} — OBV Rankings")
-        st.dataframe(
-            team_tbl,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "#": st.column_config.TextColumn("#", width="small"),
-                "player": st.column_config.TextColumn("Player"),
-                "team": st.column_config.TextColumn("Team"),
-                "OBV": _progress_col("OBV"),
-                "actions": st.column_config.NumberColumn("Actions", format="%.0f"),
-                "avg_obv": st.column_config.NumberColumn("avg OBV", format="%.4f"),
-            }
+        leader = (
+            team_df.groupby(['player', 'team'], dropna=False)["OBV"]
+                .agg(total_obv="sum", actions="size")
+                .reset_index()
         )
-        st.caption("OBV = change in P(goal within 5 actions). ‘avg_obv’ ≈ efficiency per action. Actions = on-ball events counted.")
+        leader["avg_obv"] = leader["total_obv"] / leader["actions"].replace(0, np.nan)
+        leader = leader.sort_values("total_obv", ascending=False).reset_index(drop=True)
 
+        # 3) Rank + medals
+        leader.insert(0, "#", np.arange(1, len(leader)+1))
+        medal = {1:"🥇", 2:"🥈", 3:"🥉"}
+        leader["#"] = leader["#"].map(lambda r: medal.get(r, f"{r:02d}"))
+
+        # 4) Reorder + tidy formatting columns
+        tbl = leader[["#", 'player', 'team', "total_obv", "actions", "avg_obv"]].rename(columns={
+            'player': "player",
+            'team': "team",
+            "total_obv": "OBV"
+        })
+        tbl["OBV"]     = pd.to_numeric(tbl["OBV"], errors="coerce")
+        tbl["avg_obv"] = pd.to_numeric(tbl["avg_obv"], errors="coerce")
+
+        # Pretty number strings (no ugly trailing zeros)
+        fmt = {
+            "OBV":     lambda x: "" if pd.isna(x) else f"{x:.3f}".rstrip("0").rstrip("."),
+            "avg_obv": lambda x: "" if pd.isna(x) else f"{x:.4f}".rstrip("0").rstrip("."),
+            "actions": "{:,}",
+        }
+
+        # 5) Row highlighting (podium) + subtle zebra striping
+        def _highlight_top3(row):
+            i = row.name
+            base = [f"background-color:{'#0f172a' if i % 2 else '#111827'}; color:#e5e7eb;"] * len(row)
+            if i == 0:  base = ["background-color:#0ea5e9; color:white; font-weight:bold;"] * len(row)
+            if i == 1:  base = ["background-color:#60a5fa; color:white; font-weight:bold;"] * len(row)
+            if i == 2:  base = ["background-color:#93c5fd; color:#0b1220; font-weight:bold;"] * len(row)
+            return base
+
+        # 6) Build the FIFA-style styler
+        styler = (
+            tbl.style
+            .bar(subset=["OBV"], align="left", color="#22d3ee")  # in-cell OBV bar
+            .format(fmt)
+            .hide(axis="index")
+            .set_table_styles([
+                {"selector":"th", "props":[("background-color","#0b1220"),("color","#e5e7eb"),
+                                            ("font-size","12pt"),("text-transform","uppercase"),
+                                            ("letter-spacing",".03em")]},
+                {"selector":"td", "props":[("font-size","11pt"),("border","0px"),("padding","6px 10px")]},
+            ])
+            .set_properties(subset=["#"], **{"text-align":"center","width":"42px","font-weight":"bold"})
+            .set_properties(subset=["player","team"], **{"text-align":"left","font-weight":"600"})
+            .set_properties(subset=["OBV","avg_obv","actions"], **{"text-align":"right"})
+            .apply(_highlight_top3, axis=1)
+        )
+
+        st.markdown(f"##### {team_pick} — OBV Rankings")
+        st.dataframe(styler, use_container_width=True)
+        st.caption("OBV = change in P(goal within 5 actions). ‘avg_obv’ ≈ efficiency per action. Actions = on-ball events counted.")
+    
     st.write("As seen above, that the number of actions can be correlated to the a player's OBV. Hence next steps would be to calculate the OBV per 90 minutes, as not all players get the same amount of playing time. Thus, this model and the results heavily favours players that get more playing time.")
     st.write("Also as mentioned before, a lot of the strikers that were critical to the game are lower on the list. How can we tune the model to remove this bias?")
 
-    # === Player progression line ===
-    st.markdown("#### Players's OBV Progression Throughout the Tournament")
-    col11, col22 = st.columns([0.25, 0.75])
+    st.markdown("#### Players's OBV Progression Throughout the Tournament'")
 
-    with col11:
-        pick_team = st.selectbox("Pick a team", options=teams, index=0 if teams else None, key="pick_team2")
-        players = players_for_team(obv_actions, pick_team) if (obv_actions is not None and pick_team) else []
-        player_pick = st.selectbox("Pick a player", options=players, index=0 if players else None)
+    col11, col22 = st.columns([0.2, 0.8])
 
-    with col22:
-        if obv_actions is not None and pick_team and player_pick:
-            p_df = obv_actions.loc[(obv_actions["team"] == pick_team) & (obv_actions["player"] == player_pick), ["match_id","OBV"]]
-            per_match = (p_df.groupby("match_id", dropna=False)["OBV"].sum()
-                            .reset_index().rename(columns={"OBV":"obv_match"}))
+    with col11: 
+        pick_team = st.selectbox("Pick a team", options = teams, index = 0)
 
-            # Optional match meta (kept slim to only needed cols)
-            if isinstance(matches, pd.DataFrame) and {"match_id","match_date","home_team","away_team"}.issubset(matches.columns):
-                meta = matches[["match_id","match_date","home_team","away_team"]].copy()
-                per_match = per_match.merge(meta, on="match_id", how="left")
+        players = (obv_actions.loc[obv_actions['team'] == pick_team, 'player'].dropna().sort_values().unique())
+        player_pick = st.selectbox("Pick a player", options = players, index = 0)
+
+    with col22: 
+        # OBV per match for chosen player, all stylaized and made by ChatGPT
+        p_df = obv_actions[(obv_actions['team'] == pick_team) & (obv_actions['player'] == player_pick)].copy()
+        per_match = (p_df.groupby("match_id", dropna=False)["OBV"]
+                    .sum().reset_index().rename(columns={"OBV":"obv_match"}))
+
+        # Optional: enrich with match meta (date + opponent) if you have `matches`
+        if isinstance(matches, pd.DataFrame):
+            meta = matches[["match_id","match_date","home_team","away_team"]].copy()
+            per_match = per_match.merge(meta, on="match_id", how="left")
+            # Build opponent column
+            def _opp(row):
+                if pd.isna(row.get("home_team")): return None
+                if row["home_team"] == pick_team: return row["away_team"]
+                if row["away_team"] == pick_team: return row["home_team"]
+                return None
+            per_match["opponent"] = per_match.apply(_opp, axis=1)
+            # X-axis order: by date if available, else match_id
+            if "match_date" in per_match.columns and per_match["match_date"].notna().any():
                 per_match["match_date"] = pd.to_datetime(per_match["match_date"], errors="coerce")
-                per_match["opponent"] = np.where(per_match["home_team"] == pick_team, per_match["away_team"], per_match["home_team"])
                 per_match = per_match.sort_values(["match_date","match_id"])
-                x_axis = per_match["match_date"]; x_label = "Match Date"
+                x_axis = per_match["match_date"]
+                x_label = "Match Date"
             else:
                 per_match = per_match.sort_values("match_id")
-                x_axis = per_match["match_id"]; x_label = "Match ID"
+                x_axis = per_match["match_id"]
+                x_label = "Match ID"
+        else:
+            per_match = per_match.sort_values("match_id")
+            x_axis = per_match["match_id"]
+            x_label = "Match ID"
 
-            fig = px.line(
-                per_match,
-                x=x_axis, y="obv_match",
-                markers=True,
-                hover_data={"match_id": True, "obv_match": ":.3f", "opponent": True} if "opponent" in per_match else {"match_id": True, "obv_match": ":.3f"},
-                labels={"obv_match": "OBV (per match)", x_axis.name if hasattr(x_axis, "name") else "x": x_label},
-                title=f"{player_pick} — OBV by Match ({pick_team})"
-            )
-            fig.update_traces(mode="lines+markers", line=dict(width=3))
-            fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                              font=dict(size=14), margin=dict(l=10,r=10,t=50,b=10), hovermode="x unified")
-            fig.update_yaxes(zeroline=True, zerolinewidth=1, zerolinecolor="rgba(150,150,150,0.4)")
-            fig.update_xaxes(showgrid=False)
+        # Pretty hover labels
+        hover_data = {"match_id": True, "obv_match": ":.3f"}
+        if "opponent" in per_match.columns:
+            hover_data["opponent"] = True
 
-            st.plotly_chart(fig, use_container_width=True)
-            del fig  # free reference
-        st.caption("Hover to see opponent and exact OBV values.")
+        # Plotly line (transparent background, markers, smooth-ish look)
+        fig = px.line(
+            per_match,
+            x=x_axis,
+            y="obv_match",
+            markers=True,
+            hover_data=hover_data,
+            labels={"obv_match":"OBV (per match)", x_axis.name if hasattr(x_axis, "name") else "x": x_label},
+            title=f"{player_pick} — OBV by Match ({pick_team})"
+        )
 
-# (Optional) clean up big temporaries created in this block
-import gc
-del top10, tbl, team_tbl
-gc.collect()
+        fig.update_traces(mode="lines+markers", line=dict(width=3))
+        fig.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(size=14),
+            margin=dict(l=10, r=10, t=50, b=10),
+            hovermode="x unified"
+        )
+        fig.update_yaxes(zeroline=True, zerolinewidth=1, zerolinecolor="rgba(150,150,150,0.4)")
+        fig.update_xaxes(showgrid=False)
 
-# Footer stays the same
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Optional: tiny summary under the chart
+        st.caption(
+            "Please hover the plot to see opponent team and exact OBV values."
+        )
+
+    st.write("What are some interesting observations you notice? A huge point for discourse was if Spain shouldn't have subbed out Alexia Putellas in the 70th minute of the Euros Final. I noticed that her OBV was quite low for the game, but of course we cannot determine her performance just based on one simple metric! What do you think?")
+
 st.caption("All credit for creating an OBV model goes to Hudl Statsbomb. As well as providing free open access data for the 2025 Euros. AI was utilized to improve styling, code performance and general development. All commentary and thoughts are my own. Please free to connect with me [LinkedIn](https://www.linkedin.com/in/eshah17) to share feedback or have discussion. Thank you!")
