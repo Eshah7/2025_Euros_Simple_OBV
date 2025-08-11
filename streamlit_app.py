@@ -15,6 +15,7 @@ from sklearn.metrics import roc_auc_score
 from statsbombpy import sb
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message="NoAuthWarning", category=UserWarning)
 
 #Constants 
 #UEFA Women's Euros 2025 
