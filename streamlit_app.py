@@ -13,9 +13,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
 from statsbombpy import sb
+
 import warnings
+from statsbombpy.api_client import NoAuthWarning
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", message="NoAuthWarning", category=UserWarning)
+warnings.filterwarnings("ignore", category=NoAuthWarning)
 
 #Constants 
 #UEFA Women's Euros 2025 
@@ -167,6 +169,7 @@ with tab2:
         "pass_completed","shot_goal","possession_id","action_idx_in_poss"]], use_container_width=True)
 
     #Step 5: Prepare the label, the column we want to predict, future goal in the next 5 actions (same posession)
+    @st.cache_data(show_spinner=True)
     def label_future_goal(df: pd.DataFrame) -> pd.DataFrame: 
         df = df.copy()
         df["future_goal_5"] = 0
@@ -185,13 +188,7 @@ with tab2:
         
         return df.groupby(gcols, group_keys = False).apply(mark_group).drop(columns=["_is_goal"])
 
-    #Using ChatGPT to improve the speed performance of the application
-    @st.cache_data(show_spinner=True)
-    def label_future_goal_cached(df: pd.DataFrame) -> pd.DataFrame:
-        # calls your existing function; result is cached
-        return label_future_goal(df)
-    
-    actions = label_future_goal_cached(actions)
+    actions = label_future_goal(actions)
 
     st.subheader("4. Was there be a goal in the next 5 actions?", divider = "blue")
     st.write(f"The **future_goal_5** column will be **1** if the same team scores within the next **5** actions in the **same possession**. This column will be predicted by the model later on with a probability of it being a 1 (scoring a goal within the next 5 actions).")
