@@ -247,14 +247,8 @@ with tab2:
         auc = roc_auc_score(y, model.predict_proba(X)[:,1]) if y.nunique() > 1 else float("nan")
         
         return model, (num_cols+cat_cols), auc
-
-    @st.cache_resource(show_spinner=True)
-    def get_value_model_cached(actions: pd.DataFrame):
-        states = build_state_rows(actions)
-        model, feat_cols, auc = train_value_model(states)
-        return model, feat_cols, auc
     
-    model, feat_cols, auc = get_value_model_cached(actions)
+    model, feat_cols, auc = train_value_model(states)
 
     st.subheader("6. Training and Evaluating the Model", divider="blue")
     st.write("The model we utilized was a Logistic Regression model. This model utilizes the features to predict the probability of the label being a 1 (scoring a goal within the next 5 actions) or 0. If the probability is above 0.5, then it will predict 1 (goal happening soon!). ")
@@ -298,12 +292,8 @@ with tab2:
 
         return out
        
-    @st.cache_data(show_spinner=True)
-    def get_obv_actions_cached(actions: pd.DataFrame):
-        model, feat_cols, _ = get_value_model_cached(actions)
-        return compute_obv(actions, model, feat_cols)
     
-    obv_actions = get_obv_actions_cached(actions)
+    obv_actions = compute_obv(actions, model, feat_cols)
     st.subheader("7. Calcuating the On-Ball Value of Each Action", divider="blue")
     st.markdown("We apply the model to our data to calculate the probability of scoring before the action and after the action. Thereafter calculate the following: :blue-background[Probability of Scoring After the Action - Probability of Scoring Before the Action = On-Ball Value].")
     st.dataframe(obv_actions.head()[[
