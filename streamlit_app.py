@@ -155,12 +155,9 @@ with tab2:
             raise ValueError("Expected 'posession_id' columns: Check statsbompy version!")
         df["action_idx_in_poss"] = df.groupby(["match_id", "possession_id"]).cumcount()
         return df
+
     
-    @st.cache_data(show_spinner=True)
-    def prep_actions_cached(events_raw: pd.DataFrame) -> pd.DataFrame:
-        return prep_actions(events_raw)
-    
-    actions = prep_actions_cached(events_raw)
+    actions = prep_actions(events_raw)
 
     st.subheader("3. On-Ball Actions Cleaned Table", divider = "blue")
     st.write("Here we calculated where the on the field the ball starts and end with each of the actions performed. Also, we can see the distance the ball is from the centre of the opponent's net. We will use these features to train our model soon!")
@@ -169,7 +166,6 @@ with tab2:
         "pass_completed","shot_goal","possession_id","action_idx_in_poss"]], use_container_width=True)
 
     #Step 5: Prepare the label, the column we want to predict, future goal in the next 5 actions (same posession)
-    @st.cache_data(show_spinner=True)
     def label_future_goal(df: pd.DataFrame) -> pd.DataFrame: 
         df = df.copy()
         df["future_goal_5"] = 0
