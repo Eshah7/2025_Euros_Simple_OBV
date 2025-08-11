@@ -318,7 +318,7 @@ with tab1:
     tbl["#"] = tbl["#"].map(lambda r: medal.get(r, f"{r:02d}"))
 
     # (Optional) add context: actions & avg OBV if you have obv_actions
-    if "obv_actions" in globals():
+    if obv_actions is not None:
         counts = (obv_actions.groupby(["player","team"])["OBV"]
                 .agg(actions="size", total_obv="sum")
                 .reset_index())
@@ -478,7 +478,7 @@ with tab1:
                     .sum().reset_index().rename(columns={"OBV":"obv_match"}))
 
         # Optional: enrich with match meta (date + opponent) if you have `matches`
-        if "matches" in globals() and isinstance(matches, pd.DataFrame):
+        if isinstance(matches, pd.DataFrame):
             meta = matches[["match_id","match_date","home_team","away_team"]].copy()
             per_match = per_match.merge(meta, on="match_id", how="left")
             # Build opponent column
