@@ -2,6 +2,8 @@
 
 This app shares some quick visuals to understand who was contributing to the team's chances of scoring the most throughout the tournament! Additionally, it walks through the process of cleaning Hudl Statsbomb data and training a simple model to predict the OBV of players. 
 
+[![Watch the demo](https://img.youtube.com/vi/SVBRq8ux4rI/0.jpg)](https://youtu.be/SVBRq8ux4rI)
+
 Click below to view the web-app, hosted by Streamlit.
 
 [![Click here to view the web-app, hosted by Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://2025euros.streamlit.app/)
