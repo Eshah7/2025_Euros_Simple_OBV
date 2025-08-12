@@ -102,7 +102,6 @@ with tab2:
         return df
 
     #Determine the distance to the goal 
-    @st.cache_data(show_spinner=True)
     def dist_to_goal(x, y, goal_x = 120.0, goal_y = 40.0): 
         if not (isinstance(x, (float, int)) and isinstance (y, (float, int))): 
             if math.isnan(x) or math.isnan(y): 
@@ -113,7 +112,6 @@ with tab2:
         return math.hypot(goal_x - x, goal_y - y) 
 
     #Step 4: Clean the data and make on the ball events table
-    @st.cache_data(show_spinner=True)
     def prep_actions(raw: pd.DataFrame) -> pd.DataFrame:
         
         df=raw.copy()
@@ -169,7 +167,6 @@ with tab2:
         "pass_completed","shot_goal","possession_id","action_idx_in_poss"]], use_container_width=True)
 
     #Step 5: Prepare the label, the column we want to predict, future goal in the next 5 actions (same posession)
-    @st.cache_data(show_spinner=True)
     def label_future_goal(df: pd.DataFrame) -> pd.DataFrame: 
         df = df.copy()
         df["future_goal_5"] = 0
@@ -197,7 +194,6 @@ with tab2:
     ]], use_container_width=True)
 
     #Step 6: Build a simple state rows, before and after each action. We want to predict the on ball value before and after. 
-    @st.cache_data(show_spinner=True)
     def build_state_rows(df: pd.DataFrame) -> pd.DataFrame: 
         #Before the Action
         before = df.copy()
